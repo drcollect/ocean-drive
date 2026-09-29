@@ -1,0 +1,24 @@
+{
+  "name": "ocean-drive",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "shots": "node scripts/shots.mjs",
+    "deploy": "vercel deploy --prod"
+  },
+  "dependencies": {
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "@types/three": "^0.186.0",
+    "puppeteer-core": "^24.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  }
+}

@@ -238,10 +238,15 @@ async function boot(): Promise<void> {
   const showHud = params.get('hud') === '1';
   if (showHud) hud.style.display = 'block';
 
-  const step = (dtMs: number, now: number) => {
+  // recording (dev/trailer.ts): the loop can be paused and stepped by hand, and the camera flown from code
+  let paused = false;
+  let camHook: ((t: number, dt: number) => void) | null = null;
+
+  const step = (dtMs: number, now: number, draw = true) => {
     const dt = Math.min(dtMs / 1000, 0.1);
     if (!frozen) time += dt;
     player.update(started ? dt : 0, time, input);
+    camHook?.(time, dt);
     // the shadow-only body walks with you
     shadowBody.root.visible = !player.riding;
     shadowBody.root.position.copy(player.feet);
@@ -256,8 +261,10 @@ async function boot(): Promise<void> {
     for (const u of ctx.updaters) u(time, dt);
     if (player.muteRequested) sound.toggleMute();
     sound.update(time, dt);
-    renderer.info.reset();
-    pipe.render(scene, camera, time);
+    if (draw) {
+      renderer.info.reset();
+      pipe.render(scene, camera, time);
+    }
     pipe.tick(dtMs, now);
     if (started) {
       const msg = player.prompt || (!input.s.locked && !input.s.touch ? 'Click to walk' : '');
@@ -272,7 +279,7 @@ async function boot(): Promise<void> {
   const frame = (now: number) => {
     const dtMs = now - last;
     last = now;
-    step(dtMs, now);
+    if (!paused) step(dtMs, now);
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
@@ -355,6 +362,26 @@ async function boot(): Promise<void> {
     },
     onStart,
     sound,
+    /** recording: stop the loop (true) and step it by hand; with draw false a step only simulates */
+    pause(on: boolean) {
+      paused = on;
+      started = true;
+      last = performance.now();
+    },
+    step(dtMs: number, draw = true) {
+      step(dtMs, performance.now(), draw);
+    },
+    /** fly the camera from code after the player has placed it (null gives it back) */
+    set camHook(f: ((t: number, dt: number) => void) | null) {
+      camHook = f;
+    },
+    get time() {
+      return time;
+    },
+    canvas,
+    input,
+    driving,
+    garage,
     /** average ms per frame over n synchronous frames (forces the GPU to finish) */
     /** the Collect Drop: pull (an edition, or at random), reset, the state */
     drop: {
@@ -375,6 +402,8 @@ async function boot(): Promise<void> {
     },
   };
   if (params.get('cam') || poseParam) title.hide(true);
+  // the trailer recorder, on the dev server only
+  if (import.meta.env.DEV) void import('./dev/trailer');
 }
 
 boot().catch((e) => {

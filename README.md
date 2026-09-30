@@ -2,7 +2,9 @@
 
 **Play:** https://drcollect.github.io/ocean-drive/ (GitHub Pages) · https://ocean-drive-theta.vercel.app (Vercel). Best on a desktop browser with a mouse; phones get a lighter version with touch controls.
 
-![Ocean Drive at sunrise](renders/final/final_A.jpg)
+[![The trailer, 15 seconds, recorded by the game itself](renders/trailer.gif)](https://drcollect.github.io/ocean-drive/trailer.mp4)
+
+▶ [The trailer with sound](https://drcollect.github.io/ocean-drive/trailer.mp4) (15 s, recorded by the game itself, see [The trailer](#the-trailer))
 
 A walkable first-person Ocean Drive, Miami Beach, at sunrise, in the browser, generated in code: about forty Art Deco hotels, 160 palms, the street with its parked cars, Lummus Park, the beach and the Atlantic, a few early people and birds, a beach cruiser and the lifeguard ATV to ride, every car to drive (and crash), and a fully synthesized soundscape. In Lummus Park, across the street from where you start, stands the **Collect Drop garage**: a simulation of Collect Car · Drop 01 (DEMO data; the drop's spec isn't part of this repo). Pay $99 (demo price) at the kiosk, 32 random bytes come in, the number mod the cars left picks your edition, the door rolls up and your car turns on the stand in its look. The five published editions stand in a row in front of the hotels, more editions are parked along the street. Vite + TypeScript + Three.js.
 
@@ -17,6 +19,7 @@ A walkable first-person Ocean Drive, Miami Beach, at sunrise, in the browser, ge
 | `refs/spec.md` | The full build spec |
 | `game/` | The scene (`npm install && npm run dev`) |
 | `renders/final/` | The review cameras (A–H from the spec, I the Collect row, J the drop garage) and drop reveals, as JPGs |
+| `renders/trailer.gif` | The trailer's preview; the video is `game/public/trailer.mp4` (on the site at `/trailer.mp4`) |
 | `renders/shots/` | Working screenshots (not in git) |
 | `scripts/montage.py` | Tiles screenshots into review sheets |
 | `concepts/`, `blend/` | Unused so far (everything is built in code) |
@@ -46,6 +49,12 @@ A streamline-Deco pavilion in the park (`game/src/drop/`): a pay kiosk, the live
 - Everything is labelled DEMO and "$99 (demo price)".
 
 URL options: `?q=high|medium|low` quality tier (default from the GPU: base Apple M-chips get medium, Pro/Max and discrete GPUs high, phones low), `?hud=1` fps readout, `?cam=A`…`J` start at a review camera (I looks along the Collect row, J at the drop garage), `?t=28.6` freeze the clock (the surf is on a fixed schedule, so a time is a repeatable moment), `?drop=7` repeat which editions are parked along the street (without it every load picks new ones; the console prints the number). The review renders use `?t=28.6&drop=7`.
+
+## The trailer
+
+Recorded by the game itself, on the dev server (`game/src/dev/trailer.ts`, not in the production build). Each frame steps the world by 1/30 s (two physics steps of 1/60, the second one drawn), flies the camera or lets a chase camera follow the car an autopilot drives, renders at twice the size and scales down, and draws the captions and the end card in the title screen's type; the dev server saves the frames to `game/.trailer/`. The crash is the game's own physics: the same steps give the same hit on the same frame every time. The sound is a second pass on the same timeline in real time, the audio clock setting the pace: the game's own synthesizer (the street, the surf, the engine as heard from each camera, the crash and the car alarm, the garage door and the Secret Rare sting) taken from its final mix by an AudioWorklet, with the café's bossa nova recorded dry as the bed. `game/scripts/trailer.sh` cuts it together with ffmpeg (1080p30 H.264, AAC, −14 LUFS) and makes the web copy and the GIF.
+
+To record it again: open `http://127.0.0.1:5193/?q=high&drop=7` with the window at 1920×1080, then in the console, one shot per page load: `__trailer.record('street')` (then `'beach'`, `['drive', 'crash']`, `'drop'`, `'end'`), the same with `__trailer.recordSound(…)`, and `__trailer.recordMusic()`; `__trailer.peek('drive', 1.2)` saves a single frame to check a camera. Then `FFMPEG=/path/to/ffmpeg scripts/trailer.sh` in `game/`.
 
 ## Online
 

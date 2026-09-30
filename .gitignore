@@ -9,3 +9,5 @@ renders/shots
 # not in the public repo: the Drop 01 spec (internal proposal) and the full-size PNG renders (JPGs are)
 refs/drop01-spec.md
 renders/final/*.png
+game/.trailer
+renders/*.mp4

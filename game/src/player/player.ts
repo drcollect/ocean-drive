@@ -5,7 +5,7 @@
 // any car you stand next to (a chase camera follows it; C puts you in the driver's seat).
 import { Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Vector3 } from 'three';
 import { GeoBuilder } from '../core/builder';
-import type { Ride } from '../vehicles/ride';
+import type { Ride, RideControls } from '../vehicles/ride';
 import { carDistance, type Driving } from '../vehicles/drive';
 import type { Surface } from '../world/layout';
 import { lin } from '../world/materials';
@@ -85,6 +85,8 @@ export class Player {
   drive: Driving | null = null;
   /** driving: behind the car, or in the driver's seat */
   carView: 'chase' | 'seat' = 'chase';
+  /** drive from code instead of the keys (the trailer's autopilot) */
+  pilot: ((r: Ride, t: number) => RideControls) | null = null;
   private chase = new Vector3();
   private chaseSet = false;
   private lastDt = 1 / 60;
@@ -168,7 +170,7 @@ export class Player {
       // the mouse steers a bike or the ATV; in a car it looks around
       const steerMouse = isCar ? 0 : Math.max(-1, Math.min(1, -one.lookX * 12));
       const throttle = input.s.moveZ * (isCar || (input.s.fast && r.def.kind === 'atv') ? 1 : 0.85);
-      r.update(dt, t, { throttle, steer: Math.max(-1, Math.min(1, -input.s.moveX + steerMouse)) });
+      r.update(dt, t, this.pilot?.(r, t) ?? { throttle, steer: Math.max(-1, Math.min(1, -input.s.moveX + steerMouse)) });
       this.feet.copy(r.pos);
       this.surface = r.surface;
       this.speed = Math.abs(r.speed);

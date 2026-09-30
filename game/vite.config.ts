@@ -1,8 +1,8 @@
 import { defineConfig, type Plugin } from 'vite';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
-/** Dev only: POST a canvas data URL to /__shot?name=x and it lands in .shots/x.png (for automated checks). */
+/** Dev only: POST a canvas data URL to /__shot?name=x and it lands in .shots/x.png (for automated checks); /__save takes raw bytes. */
 function shots(): Plugin {
   return {
     name: 'od-shots',
@@ -19,6 +19,19 @@ function shots(): Plugin {
           mkdirSync(dir, { recursive: true });
           const b64 = body.replace(/^data:image\/\w+;base64,/, '');
           writeFileSync(join(dir, `${name}.png`), Buffer.from(b64, 'base64'));
+          res.end('ok');
+        });
+      });
+      // the trailer's frames and sound: POST the raw bytes to /__save?path=shot/0001.jpg → .trailer/shot/0001.jpg
+      server.middlewares.use('/__save', (req, res) => {
+        const url = new URL(req.url ?? '', 'http://x');
+        const rel = (url.searchParams.get('path') ?? 'file').replace(/[^\w./-]/g, '_').replace(/\.{2,}/g, '_');
+        const chunks: Buffer[] = [];
+        req.on('data', (c: Buffer) => chunks.push(c));
+        req.on('end', () => {
+          const file = join(server.config.root, '.trailer', rel);
+          mkdirSync(dirname(file), { recursive: true });
+          writeFileSync(file, Buffer.concat(chunks));
           res.end('ok');
         });
       });

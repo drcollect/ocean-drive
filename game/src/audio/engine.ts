@@ -6,6 +6,8 @@ export class AudioEngine {
   readonly master: GainNode;
   /** everything spatial goes through here (then the master) */
   readonly bus: GainNode;
+  /** the final mix, after the compressor (what you hear; the trailer records it) */
+  readonly out: AudioNode;
   readonly white: AudioBuffer;
   readonly pink: AudioBuffer;
   readonly brown: AudioBuffer;
@@ -25,6 +27,7 @@ export class AudioEngine {
     this.bus.connect(this.master);
     this.master.connect(comp);
     comp.connect(this.ctx.destination);
+    this.out = comp;
     this.white = this.noise('white', 4);
     this.pink = this.noise('pink', 4);
     this.brown = this.noise('brown', 4);

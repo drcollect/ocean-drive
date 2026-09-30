@@ -53,7 +53,7 @@ echo "sound: $T/sound.wav"
 "$FF" -hide_banner -loglevel error -y -framerate 30 -i "$T/all/%04d.jpg" -i "$T/sound.wav" \
   -vf "scale=in_range=full:out_range=limited:in_color_matrix=bt601:out_color_matrix=bt709,format=yuv420p" \
   -color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709 \
-  -c:v libx264 -preset slow -crf 18 -maxrate 20M -bufsize 40M -profile:v high \
+  -c:v libx264 -preset slow -crf 19 -maxrate 13M -bufsize 26M -profile:v high \
   -c:a aac -b:a 192k -shortest -movflags +faststart "$T/ocean-drive-trailer.mp4"
 # the site's copy: lighter
 "$FF" -hide_banner -loglevel error -y -i "$T/ocean-drive-trailer.mp4" \

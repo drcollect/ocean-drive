@@ -810,14 +810,15 @@ export async function buildDropGarage(d: GarageDeps): Promise<DropGarage> {
     if (showing || open > 0.01) {
       go('closing');
       sound()?.door(DUR.closing);
-    } else go('paying');
+    } else beginPay();
     return true;
   };
-  const beginPay = () => {
+  // (the bill and its sound on every pull: the first one used to skip the sound, the door being shut already)
+  function beginPay(): void {
     go('paying');
     sound()?.pay();
     bill.visible = true;
-  };
+  }
   const lightTier = (tier: Tier | null, level: number) => {
     const c = tier ? new Color(tier.color) : new Color(1, 1, 1);
     tierCol.copy(c);

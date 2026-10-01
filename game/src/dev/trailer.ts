@@ -31,6 +31,7 @@ interface OD {
   freeze(t?: number): void;
   run(): void;
   press(code: string): void;
+  cam(id: string): string;
   drop: { pull(edition?: number): void; reset(): void; phase(): string };
 }
 const od = () => (window as unknown as { __od: OD }).__od;
@@ -102,8 +103,8 @@ function caption(c: Caption, s: number, dur: number): void {
   g.restore();
 }
 
-/** The end card: the title screen's name and line, and where to play. */
-function endCard(s: number): void {
+/** The end card: the title screen's name and a line, and where to play. */
+function endCard(s: number, line = 'MIAMI BEACH · MORNING'): void {
   const a = smooth(s / 0.6);
   g.save();
   // the title screen's warm wash
@@ -125,7 +126,7 @@ function endCard(s: number): void {
   g.shadowColor = 'rgba(90, 30, 45, 0.6)';
   g.shadowBlur = 40;
   spaced('OCEAN DRIVE', W / 2, H * 0.4, 128, 500, 0.3, '#fff8f0', a);
-  spaced('MIAMI BEACH · MORNING', W / 2, H * 0.4 + 74, 28, 600, 0.42, '#fff3e6', smooth((s - 0.25) / 0.5));
+  spaced(line.toUpperCase(), W / 2, H * 0.4 + 74, 28, 600, 0.42, '#fff3e6', smooth((s - 0.25) / 0.5));
   const b = smooth((s - 0.55) / 0.5);
   g.shadowColor = 'rgba(30, 12, 20, 0.7)';
   g.shadowBlur = 24;
@@ -149,7 +150,10 @@ export interface Shot {
   /** fly the camera; u runs 0→1 over the shot, s in seconds (none: the player's own camera) */
   cam?(cam: PerspectiveCamera, u: number, s: number): void;
   caption?: Caption;
-  end?: boolean;
+  /** the end card (a string: its line under the name) */
+  end?: boolean | string;
+  /** keys held down through the shot (the walker walks: KeyW, ShiftLeft) */
+  hold?: string[];
   /** the sound pass: stand the walker here (the surf plays from where you stand) */
   listen?: [number, number];
   /** the sound pass: the engine of the car you drive, as heard from this camera (1: from the driver's seat) */
@@ -242,6 +246,61 @@ function takeCar(o: OD, x: number, z: number, at?: { x: number; z: number; yaw: 
 }
 
 let ride: Ride | null = null;
+
+/** the keys the walker reads (a lost focus clears them, so a shot holds its own every step) */
+const keys = (o: OD) => (o.input as unknown as { keys: Set<string> }).keys;
+function hold(o: OD, codes: string[]): void {
+  for (const c of codes) keys(o).add(c);
+}
+function release(o: OD): void {
+  keys(o).clear();
+}
+
+/** The pull's 32 bytes, the same on every take (the garage asks the browser's crypto for them). */
+function fixedBytes(): void {
+  let x = 0x2f6b9d31;
+  crypto.getRandomValues = (<T extends ArrayBufferView | null>(a: T): T => {
+    if (a) {
+      const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+      for (let i = 0; i < u.length; i++) {
+        x = (Math.imul(x, 1664525) + 1013904223) >>> 0;
+        u[i] = x >>> 24;
+      }
+    }
+    return a;
+  }) as typeof crypto.getRandomValues;
+}
+
+/** Step until the garage reaches a phase (the car loads in between: let the page breathe). */
+async function untilPhase(o: OD, phase: string, max = 1800): Promise<void> {
+  for (let i = 0; i < max && o.drop.phase() !== phase; i++) {
+    o.step(1000 / 60, false);
+    if (i % 4 === 0) await new Promise((r) => setTimeout(r, 0));
+  }
+}
+
+/** A chase camera that starts close (inside the garage) and drops back as the car gets going. */
+function chaseOut(): Shot['cam'] {
+  const pos = new Vector3();
+  const look = new Vector3();
+  return (cam, _u, s) => {
+    const r = ride;
+    if (!r) return;
+    const k = smooth(s / 2.2);
+    const dist = 3.1 + 3.6 * k;
+    const f = r.forward;
+    const rt = r.right;
+    const want = v(r.pos.x - f.x * dist + rt.x * 0.35, r.pos.y + 1.45 + 0.1 * k, r.pos.z - f.z * dist + rt.z * 0.35);
+    const at = v(r.pos.x + f.x * 8, r.pos.y + 0.9, r.pos.z + f.z * 8);
+    if (s < 0.02) {
+      pos.copy(want);
+      look.copy(at);
+    }
+    pos.lerp(want, 0.22);
+    look.lerp(at, 0.3);
+    aim(cam, pos, look, 54 - 8 * k);
+  };
+}
 
 /** A trailer chase camera: closer and lower than the game's, on a longer lens, a little off to one side. */
 function chase(dist: number, height: number, side: number, fov: number): Shot['cam'] {
@@ -388,7 +447,234 @@ export const SHOTS: Record<string, Shot> = {
   },
 };
 
+// ---- the drop cut (renders/social): walk Ocean Drive, find the garage, throw in money, the door rolls up on
+// your car, get in and drive away (or crash it). A concept for future drops: demo data.
+
+const garageCam = (cam: PerspectiveCamera, u: number) => {
+  const k = smooth(u);
+  aim(cam, lerpV(v(10.3, 2.7, 99.6), v(12.5, 2.3, 99.3), k), lerpV(v(30, 3.2, 97.6), v(30, 2.6, 97.6), k), 50);
+};
+
+Object.assign(SHOTS, {
+  's-street': {
+    name: 's-street',
+    dur: 2.0,
+    setup: (o: OD) => {
+      o.freeze(28.6);
+      o.run();
+      park(o);
+    },
+    cam: (cam: PerspectiveCamera, u: number) => {
+      const k = smooth(u);
+      aim(cam, lerpV(v(1.8, 2.4, 138), v(0.7, 8.2, 136.4), k), lerpV(v(-2.5, 3.8, 60), v(-2, 1.5, 44), k), 50);
+    },
+    caption: { text: 'Walk Ocean Drive at sunrise', sub: 'a 3D concept for future drops' },
+    listen: [1.6, 137],
+  },
+  // you, walking from the sidewalk across the lawn to the kiosk
+  's-walk': {
+    name: 's-walk',
+    dur: 2.0,
+    preroll: 0.4,
+    setup: (o: OD) => {
+      o.freeze(44);
+      o.run();
+      o.player.teleport(8.6, 100.6, Math.PI / 2, 0.03);
+      hold(o, ['KeyW', 'ShiftLeft']);
+    },
+    hold: ['KeyW', 'ShiftLeft'],
+    caption: { text: 'There’s a garage in the park' },
+  },
+  // at the kiosk: the bill goes in
+  's-pay': {
+    name: 's-pay',
+    dur: 2.0,
+    setup: (o: OD) => {
+      release(o);
+      o.player.teleport(16.0, 100.2, Math.PI / 2 + 0.3, -0.06);
+      fixedBytes();
+      o.drop.reset();
+      o.drop.pull(32);
+    },
+    caption: { text: 'Throw in some money', sub: '$99 · demo price' },
+  },
+  // the board: the bytes come in, the number mod the cars left picks the car
+  's-board': {
+    name: 's-board',
+    dur: 1.8,
+    cam: (cam: PerspectiveCamera, u: number) => aim(cam, lerpV(v(16.6, 3.45, 103.4), v(17.1, 3.47, 103.45), smooth(u)), v(20.3, 3.5, 103.5), 32),
+    caption: { text: '32 random bytes pick your car' },
+  },
+  // the door rolls up
+  's-reveal': {
+    name: 's-reveal',
+    dur: 2.8,
+    setup: () => {},
+    ready: (o: OD) => untilPhase(o, 'opening'),
+    preroll: 0.15,
+    cam: garageCam,
+    caption: { text: 'Secret Rare', sub: '1 of 25 · the rarest tier', from: 1.15 },
+  },
+  // you walk in to it
+  's-getin': {
+    name: 's-getin',
+    dur: 1.6,
+    setup: () => {},
+    ready: async (o: OD) => {
+      await untilPhase(o, 'show');
+      o.player.teleport(18.6, 98.0, Math.PI / 2, -0.12);
+      hold(o, ['KeyW']);
+    },
+    hold: ['KeyW'],
+    caption: { text: 'Get in' },
+  },
+  // and out of the garage, onto Ocean Drive
+  's-drive': {
+    name: 's-drive',
+    dur: 3.0,
+    setup: (o: OD) => {
+      release(o);
+      ride = takeCar(o, o.player.feet.x, o.player.feet.z, { x: 24.4, z: 98, yaw: -Math.PI / 2 });
+      // out of the door, right across the lawn between the lamps, then north up Ocean Drive
+      o.player.pilot = pilot([
+        [24.4, 98, 7],
+        [19.5, 98, 9],
+        [16, 97.4, 10],
+        [12.8, 95.2, 11],
+        [10, 92.3, 12],
+        [7, 89, 13],
+        [4.2, 85.5, 15],
+        [2.8, 81, 17],
+        [2.6, 70, 20],
+        [2.6, 20, 22],
+      ]);
+    },
+    preroll: 0.5,
+    cam: chaseOut(),
+    caption: { text: 'and drive away' },
+    engine: 0.45,
+  },
+  // or crash it: the Streamliner up Ocean Drive into the white convertible
+  's-crash': {
+    name: 's-crash',
+    dur: 2.2,
+    setup: (o: OD) => SHOTS.drive.setup!(o),
+    preroll: 6.65,
+    cam: SHOTS.crash.cam,
+    caption: { text: 'or crash it', from: 0.75 },
+    engine: 0.22,
+  },
+  's-end': {
+    name: 's-end',
+    dur: 2.0,
+    setup: SHOTS.end.setup,
+    cam: SHOTS.end.cam,
+    end: 'a 3D concept for future drops',
+    listen: [0.4, 55],
+  },
+} satisfies Record<string, Shot>);
+
+// ---- stills for the thread, without captions: __trailer.peek('p-cars') (the crash wants a fresh page)
+
+const pullSetup = (o: OD) => {
+  o.freeze(50);
+  o.run();
+  park(o, 10, 99);
+  fixedBytes();
+  o.drop.reset();
+  o.drop.pull(32);
+};
+const steps = (o: OD, seconds: number) => {
+  for (let i = 0; i < Math.round(seconds * 60); i++) o.step(1000 / 60, false);
+};
+
+Object.assign(SHOTS, {
+  // the five Collect cars in their row in front of the hotels
+  'p-cars': {
+    name: 'p-cars',
+    dur: 1,
+    setup: (o: OD) => {
+      o.freeze(28.6);
+      o.run();
+      park(o);
+    },
+    cam: (cam: PerspectiveCamera) => aim(cam, v(2.8, 2.2, 125), v(-5.8, 0.7, 103), 34),
+  },
+  'p-street': {
+    name: 'p-street',
+    dur: 1,
+    setup: (o: OD) => {
+      o.freeze(28.6);
+      o.run();
+      park(o);
+    },
+    cam: (cam: PerspectiveCamera) => aim(cam, v(0.7, 8.2, 136.4), v(-2, 1.5, 44), 50),
+  },
+  'p-board': {
+    name: 'p-board',
+    dur: 1,
+    setup: pullSetup,
+    ready: async (o: OD) => {
+      await untilPhase(o, 'assign');
+      steps(o, 0.7);
+    },
+    cam: (cam: PerspectiveCamera) => aim(cam, v(16.9, 3.3, 103.45), v(20.3, 3.3, 103.5), 36),
+  },
+  'p-reveal': {
+    name: 'p-reveal',
+    dur: 1,
+    setup: pullSetup,
+    ready: async (o: OD) => {
+      await untilPhase(o, 'show');
+      steps(o, 0.4);
+    },
+    cam: (cam: PerspectiveCamera) => aim(cam, v(12.2, 2.2, 99.4), v(30, 2.4, 97.8), 48),
+  },
+  'p-drive': { ...SHOTS.drive, name: 'p-drive', caption: undefined },
+  'p-crash': { ...(SHOTS['s-crash'] as Shot), name: 'p-crash', caption: undefined },
+} satisfies Record<string, Shot>);
+
+/** The review cameras in a grid (how every stage of the build was checked), saved to .trailer/peek/p-cams.jpg. */
+async function cams(ids = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'I', 'J']): Promise<string> {
+  const o = od();
+  prepare(o);
+  current = null;
+  o.freeze(28.6);
+  o.run();
+  const cols = 3;
+  const w = W / cols;
+  const h = H / cols;
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, W, H);
+  ids.forEach((id, i) => {
+    o.cam(id);
+    for (let k = 0; k < 3; k++) o.step(1000 / 60, k === 2);
+    const x = (i % cols) * w;
+    const y = Math.floor(i / cols) * h;
+    g.drawImage(o.canvas, x + 2, y + 2, w - 4, h - 4);
+    g.save();
+    g.fillStyle = 'rgba(20, 12, 18, 0.55)';
+    g.fillRect(x + 14, y + 14, 46, 46);
+    g.font = `600 30px ${FONT}`;
+    g.fillStyle = '#fff8f0';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(id, x + 37, y + 38);
+    g.restore();
+  });
+  await save('peek/p-cams.jpg', await blob());
+  return 'peek/p-cams.jpg';
+}
+
 export const ORDER = ['street', 'beach', 'drive', 'crash', 'drop', 'end'];
+/** the cuts, and which shots record on one page (in one go) */
+export const CUTS = {
+  trailer: { shots: ORDER, pages: [['street'], ['beach'], ['drive', 'crash'], ['drop'], ['end']] },
+  social: {
+    shots: ['s-street', 's-walk', 's-pay', 's-board', 's-reveal', 's-getin', 's-drive', 's-crash', 's-end'],
+    pages: [['s-street'], ['s-walk', 's-pay', 's-board', 's-reveal', 's-getin', 's-drive'], ['s-crash'], ['s-end']],
+  },
+};
 
 // ---- recording
 
@@ -408,6 +694,7 @@ function prepare(o: OD): void {
   o.camHook = (_t, dt) => {
     if (!current) return;
     shotS += dt;
+    if (current.hold) hold(o, current.hold);
     if (!current.cam) return;
     current.cam(o.camera, clamp01(shotS / current.dur), shotS);
     if (shake > 0.004) o.camera.position.add(v((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake));
@@ -432,7 +719,7 @@ function frame(o: OD, shot: Shot): void {
   o.step(1000 / 60, true);
   g.drawImage(o.canvas, 0, 0, W, H);
   if (shot.caption) caption(shot.caption, shotS, shot.dur);
-  if (shot.end) endCard(shotS);
+  if (shot.end) endCard(shotS, typeof shot.end === 'string' ? shot.end : undefined);
 }
 
 const blob = () => new Promise<Blob>((res) => out.toBlob((b) => res(b!), 'image/jpeg', 0.94));
@@ -619,11 +906,11 @@ async function studio(o: OD): Promise<{ s: Sound; ctx: AudioContext; mute: GainN
 }
 
 /**
- * The sound of shots (in order, continuous, on this page): set up as record() does, then step the world in
- * real time (the audio clock sets the pace) so the game plays what the picture shows, and save the mix to
- * .trailer/audio/<name>.wav. The camera, the car and the crashes run exactly as in the picture pass.
+ * The sound of shots (in order, on this page): set up as record() does, then step the world in real time (the
+ * audio clock sets the pace) so the game plays what the picture shows, and save each shot's mix to
+ * .trailer/audio/<shot>.wav. The camera, the walker, the car and the crashes run exactly as in the picture pass.
  */
-async function recordSound(names: string | string[], name?: string): Promise<string> {
+async function recordSound(names: string | string[]): Promise<string> {
   const o = od();
   prepare(o);
   const { s, ctx, mute } = await studio(o);
@@ -631,43 +918,42 @@ async function recordSound(names: string | string[], name?: string): Promise<str
   const master = s.engine.master.gain;
   master.cancelScheduledValues(0);
   master.value = 0;
-  await begin(o, list[0], true);
-  const at = list[0].listen;
-  if (at && !o.player.riding) o.player.teleport(at[0], at[1], 0, 0);
   // the trailer's mix: the engine as heard from each camera, the knocks up close whatever the camera
   const trim = ctx.createGain();
-  trim.gain.value = list[0].engine ?? 1;
   s.engineS.g.disconnect();
   s.engineS.g.connect(trim).connect(s.engine.bus);
   for (const pn of s.crashes.pans) pn.refDistance = 14;
   const t = await tap(ctx, s.engine.out, mute);
   const sr = ctx.sampleRate;
-  const t0 = ctx.currentTime + 0.25;
-  master.setValueAtTime(0.9, t0 - 0.02);
-  let k = 0; // steps taken
+  const done: string[] = [];
   for (let i = 0; i < list.length; i++) {
-    if (i > 0) {
-      trim.gain.setValueAtTime(list[i].engine ?? 1, t0 + k / 60);
-      await begin(o, list[i], !!list[i].setup);
-    }
-    const end = k + Math.round(list[i].dur * 60);
-    while (k < end) {
+    const shot = list[i];
+    await begin(o, shot, i === 0 || !!shot.setup);
+    const at = shot.listen;
+    if (at && !o.player.riding) o.player.teleport(at[0], at[1], 0, 0);
+    trim.gain.value = shot.engine ?? 1;
+    const t0 = ctx.currentTime + 0.12;
+    if (i === 0) master.setValueAtTime(0.9, t0 - 0.02);
+    const n = Math.round(shot.dur * 60);
+    for (let k = 0; k < n; ) {
       // a frame shows the world after its two steps, a thirtieth of a second on: step that far ahead
       if (ctx.currentTime >= t0 + (k + 1) / 60 - 1 / 30) {
         o.step(1000 / 60, false);
         k++;
       } else await sleep(2);
     }
+    const dur = n / 60;
+    while (ctx.currentTime < t0 + dur + 0.05) await sleep(5);
+    const file = `audio/${shot.name}.wav`;
+    await save(file, wav(t, Math.round(t0 * sr), Math.round(dur * sr), sr));
+    t.chunks = t.chunks.filter((c) => c.f >= Math.round((t0 + dur) * sr) - 512);
+    done.push(`${file}: ${dur.toFixed(2)} s`);
   }
-  const dur = k / 60;
-  while (ctx.currentTime < t0 + dur + 0.1) await sleep(10);
   t.node.disconnect();
   s.engine.out.disconnect();
-  const file = `audio/${name ?? list.map((x) => x.name).join('-')}.wav`;
-  await save(file, wav(t, Math.round(t0 * sr), Math.round(dur * sr), sr));
   current = null;
   o.camHook = null;
-  return `${file}: ${dur.toFixed(2)} s`;
+  return done.join(', ');
 }
 
 /** The café's bossa nova on its own, dry (in the game it plays from a terrace): `seconds` of it. */
@@ -684,4 +970,4 @@ async function recordMusic(seconds = 16): Promise<string> {
   return `audio/music.wav: ${seconds} s`;
 }
 
-(window as unknown as { __trailer: unknown }).__trailer = { record, recordSound, recordMusic, peek, rehearse, SHOTS, ORDER, ride: () => ride, cars };
+(window as unknown as { __trailer: unknown }).__trailer = { record, recordSound, recordMusic, peek, rehearse, cams, SHOTS, ORDER, CUTS, ride: () => ride, cars };

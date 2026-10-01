@@ -6,7 +6,7 @@
 
 ▶ [The trailer with sound](https://drcollect.github.io/ocean-drive/trailer.mp4) (15 s, recorded by the game itself, see [The trailer](#the-trailer))
 
-A walkable first-person Ocean Drive, Miami Beach, at sunrise, in the browser, generated in code: about forty Art Deco hotels, 160 palms, the street with its parked cars, Lummus Park, the beach and the Atlantic, a few early people and birds, a beach cruiser and the lifeguard ATV to ride, every car to drive (and crash), and a fully synthesized soundscape. In Lummus Park, across the street from where you start, stands the **Collect Drop garage**: a simulation of Collect Car · Drop 01 (DEMO data; the drop's spec isn't part of this repo). Pay $99 (demo price) at the kiosk, 32 random bytes come in, the number mod the cars left picks your edition, the door rolls up and your car turns on the stand in its look. The five published editions stand in a row in front of the hotels, more editions are parked along the street. Vite + TypeScript + Three.js.
+A walkable first-person Ocean Drive, Miami Beach, at sunrise, in the browser, generated in code: 34 Art Deco hotels, about 160 palms, the street with its parked cars, Lummus Park, the beach and the Atlantic, a few early people and birds, a beach cruiser and the lifeguard ATV to ride, every car to drive (and crash), and a fully synthesized soundscape. In Lummus Park, across the street from where you start, stands the **Collect Drop garage**: a simulation of Collect Car · Drop 01, a concept for how future drops could feel in 3D (DEMO data, not a sale; the drop's spec isn't part of this repo). Pay $99 (demo price) at the kiosk, 32 random bytes come in, the number mod the cars left picks your edition, the door rolls up and your car turns on the stand in its look. The five published editions stand in a row in front of the hotels, more editions are parked along the street. Vite + TypeScript + Three.js.
 
 | | |
 |---|---|
@@ -50,11 +50,33 @@ A streamline-Deco pavilion in the park (`game/src/drop/`): a pay kiosk, the live
 
 URL options: `?q=high|medium|low` quality tier (default from the GPU: base Apple M-chips get medium, Pro/Max and discrete GPUs high, phones low), `?hud=1` fps readout, `?cam=A`…`J` start at a review camera (I looks along the Collect row, J at the drop garage), `?t=28.6` freeze the clock (the surf is on a fixed schedule, so a time is a repeatable moment), `?drop=7` repeat which editions are parked along the street (without it every load picks new ones; the console prints the number). The review renders use `?t=28.6&drop=7`.
 
+## Made with Claude Code
+
+Everything here, from the sky to the drop garage, the trailer and this README, came out of a conversation with
+Claude Code (Claude Opus 5.5); the prompts were plain words, typos and all. A few of them:
+
+- *"Build a complete walkable first-person browser scene of Ocean Drive, Miami Beach at sunrise. Use Three.js +
+  Vite. The result must look like real travel photography of South Beach at golden hour, not a video game."* The
+  opening of the spec that started it (`refs/spec.md`). Claude built it stage by stage and checked every stage
+  from eight review cameras.
+- *"make the parked cars look less like toys"*: the street's cars were rebuilt as lofted bodies with tinted glass,
+  cabins and three levels of detail.
+- *"Now include my five cars that I generated, you know? The ones from the drop. I want to see them parked.
+  Different colors."* The five Collect cars, one per tier of the drop.
+- *"For me it's more important that I want to simulate a drop but in 3D … maybe you throw in some money and then
+  the garage opens and you see if it's a secret rare, you can look at the color, inspect everything."* The Collect
+  Drop garage.
+- *"now let me jum in a ar and drive / in any car"* and *"coool now I want to be able to crash other cars"*: every
+  car drivable, and crashes with masses, impulses and spin. Testing them by ramming parked cars, Claude found its
+  own collision check skipped every car, and fixed it.
+- *"Just let it spin on the turntable at a good speed."*, *"publish on vercel public"*, *"Can you upload this to
+  my GitHub and make it playable on GitHub?"*: one line each.
+
 ## The trailer
 
 Recorded by the game itself, on the dev server (`game/src/dev/trailer.ts`, not in the production build). Each frame steps the world by 1/30 s (two physics steps of 1/60, the second one drawn), flies the camera or lets a chase camera follow the car an autopilot drives, renders at twice the size and scales down, and draws the captions and the end card in the title screen's type; the dev server saves the frames to `game/.trailer/`. The crash is the game's own physics: the same steps give the same hit on the same frame every time. The sound is a second pass on the same timeline in real time, the audio clock setting the pace: the game's own synthesizer (the street, the surf, the engine as heard from each camera, the crash and the car alarm, the garage door and the Secret Rare sting) taken from its final mix by an AudioWorklet, with the café's bossa nova recorded dry as the bed. `game/scripts/trailer.sh` cuts it together with ffmpeg (1080p30 H.264, AAC, −14 LUFS) and makes the web copy and the GIF.
 
-To record it again: open `http://127.0.0.1:5193/?q=high&drop=7` with the window at 1920×1080, then in the console, one shot per page load: `__trailer.record('street')` (then `'beach'`, `['drive', 'crash']`, `'drop'`, `'end'`), the same with `__trailer.recordSound(…)`, and `__trailer.recordMusic()`; `__trailer.peek('drive', 1.2)` saves a single frame to check a camera. Then `FFMPEG=/path/to/ffmpeg scripts/trailer.sh` in `game/`.
+To record it again: open `http://127.0.0.1:5193/?q=high&drop=7` with the window at 1920×1080, then in the console, one shot per page load: `__trailer.record('street')` (then `'beach'`, `['drive', 'crash']`, `'drop'`, `'end'`), the same with `__trailer.recordSound(…)`, and `__trailer.recordMusic()`; `__trailer.peek('drive', 1.2)` saves a single frame to check a camera. Then `FFMPEG=/path/to/ffmpeg scripts/trailer.sh` in `game/`. A second cut tells the drop as a story (walk Ocean Drive, find the garage, throw in money, the door rolls up, get in and drive away): its shots are the `s-` ones, recorded page by page as `__trailer.CUTS.social.pages` lists them, then `scripts/trailer.sh social`.
 
 ## Online
 
@@ -75,3 +97,12 @@ A static site: the only files it loads besides the bundle are the five GLBs; the
 - `audio/` Web Audio, HRTF: wave voices along the shore, swash at your feet, gulls from the visible birds, wind by nearby palms and gusts, footsteps per surface, the passing car with Doppler, generative bossa nova (Karplus–Strong guitar) from one terrace, freewheel, ATV engine.
 
 Dev hooks in the browser console: `__od.cam('E')`, `__od.shot('name')` (saves `game/.shots/name.png`), `__od.bench()`, `__od.sim(['KeyW'], 2)`.
+
+## License
+
+The code is under the [MIT license](LICENSE): the game, the trailer recorder and the tooling.
+
+**The cars are excluded.** The five Collect Car models in `game/public/models/cars/`, the car designs they contain
+(also as seen in the screenshots and the videos) and the Collect names belong to Collect (https://collect.app),
+all rights reserved. They're included so the game can be played; don't reuse them outside it without permission.
+See [`game/public/models/cars/LICENSE.md`](game/public/models/cars/LICENSE.md).

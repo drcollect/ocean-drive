@@ -11,3 +11,5 @@ refs/drop01-spec.md
 renders/final/*.png
 game/.trailer
 renders/*.mp4
+# drafts for social posts (not public until posted)
+renders/social/
